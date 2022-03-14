@@ -13,6 +13,7 @@ library(gridExtra)
 library(scales)
 library(lubridate)
 library(ggplot2)
+#load the datasets
 covid <- read_csv("WHO-COVID-19-global-data.csv")
 vac <- read_csv("vaccination-data.csv")
 ```
@@ -24,7 +25,6 @@ The current outbreak of the novel coronavirus disease (COVID-19) has spread all 
 covid <- covid %>% 
   filter(WHO_region != "Other") %>% 
   mutate(WHO_region = fct_recode(WHO_region,"Eastern Mediterranean"="EMRO","Europe" = "EURO","Africa" = "AFRO","Western Pacific" = "WPRO","Americas"="AMRO","South-East Asia" = "SEARO"))
-
 range(covid$Date_reported)
 length(unique(covid$Country))
 unique(covid$WHO_region)
@@ -92,6 +92,7 @@ A WHO-led international mission has begun investigations in China to try to esta
 ### "covid" dataset
 
 ```{r include=FALSE}
+#data exploration
 range(covid$New_cases)
 range(covid$New_deaths)
 range(covid$Cumulative_cases)
@@ -119,13 +120,10 @@ world <- map_data("world");
 world$region <- replace(world$region, world$region == "USA", "United States of America")
 worldplot <- ggplot() +
   geom_polygon(data = world, aes(x=long, y = lat, group = group)) 
-
 covid.today<- covid %>% 
   filter(Date_reported == "2022-02-18") %>% 
   mutate(region=Country)
-
 covid.today.world<- inner_join(world, covid.today, by = "region")
-
 fig.map  <- ggplot() +
   geom_polygon(data = covid.today.world, aes(x=long, y = lat, group = group,fill=New_deaths)) + 
   coord_fixed(1.3)
@@ -155,6 +153,7 @@ We perform data exploration on the "vaccine" dataset. The range of update dates 
 
 From the scatter plot, we observe that that the number of persons who are fully vaccinated and total vaccinations per 100 population of different countries are different, which may contribute to different COVID 19 severity of different countries. 
 ```{r warning=FALSE, include=FALSE}
+# data exploration
 length(unique(vac$COUNTRY))
 Ctr_list_covid=unique(covid.exist.new$Country)
 Ctr_list_cov=unique(vac$COUNTRY)
@@ -177,6 +176,7 @@ fig.scatter.7
 For different WHO regions, the vaccination status is also different. With respect to the "TOTAL_VACCINATIONS_PER100" metric, the mean statistics for different WHO regions are provided below, from which we notice that "AFRO" has the lowest vaccination rate and "WPRO" has the highest vaccination rate. 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
+# construct the dataframe that contains both the information of vaccination rate and the COVID numbers
 vac.new = vac.c %>% filter(DATE_UPDATED > "2021-12-31", PERSONS_FULLY_VACCINATED_PER100 >= 60)
 Ctr_list=unique(vac.new$COUNTRY)
 covid.common=covid.c %>% filter(Country %in% Ctr_list) 
@@ -201,6 +201,7 @@ table(vac.c$NUMBER_VACCINES_TYPES_USED)
 
 ## Inference analysis 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
+#drop na
 covid.c = drop_na(covid.c)
 ```
 
@@ -221,6 +222,7 @@ $\mathcal{H}_0: \text{not all }\alpha_i=0$.
 We perform a box-cox transformation to check whether the relationship between new cases and WHO region is linear and see whether there is a transformation needed. For the log-likelihood plot, we find that the optimal value of $\lambda$ is approximately 0, which indicates that a log transformation is needed for the output variable. 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Transformation of the output Variable 
 library(MASS)
 boxcox(Cumulative_cases ~ WHO_region, data = covid.c)
 covid.c$Cumulative_cases_log = log(covid.c$Cumulative_cases)
@@ -232,6 +234,7 @@ covid.c$New_deaths_log=log(covid.c$New_deaths)
 #### Fitted model 
 By fitting the model on the transformed output variable, it is observed that the P-value is smaller than 0.05. Thus, we will reject the null hypothesis and conclude that WHO region has effects on the number of cumulative cases with significance level of 0.05. 
 ```{r echo=FALSE, warning=FALSE}
+# fit model
 covid.day = covid.c %>% filter(Date_reported == "2022-03-01") 
 anova.fit.case.who<- aov(Cumulative_cases_log~WHO_region,data=covid.day)
 # Summary
@@ -241,6 +244,7 @@ summary(anova.fit.case.who)
 ### number of types of vaccines used v.s. case-mortality rate
 We want to explore whether there is a number of types of vaccines used that has the least protection for the virus when the vaccine rates are of the similar level. To control the parameter, we will only use the data of countries that have similar vaccinated rate. By exploring the "vaccin" dataset, we decide to use the data of countries with vaccine rate higher than $60\%$ and there are 91 countries selected. 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
+# construct the data frame to be used
 vac.new = vac.c %>% filter(DATE_UPDATED > "2021-12-31", PERSONS_FULLY_VACCINATED_PER100 >= 60)
 Ctr_list=unique(vac.new$COUNTRY)
 covid.common=covid.c %>% filter(Country %in% Ctr_list) 
@@ -272,6 +276,7 @@ We fit the anova model and from the results, it is observed that the P-value is 
 (2) countries that use too many vaccines are generally further behind and have poorer medical conditions.
 
 ```{r echo=FALSE, warning=FALSE}
+#fit the model
 anova.fit.ratio<- aov(ratio~NType,data=covid.new)
 # Summary
 summary(anova.fit.ratio)
@@ -281,6 +286,7 @@ aggregate(ratio~NType,covid.new,mean)
 
 From the Tukey test, we find that when Ntype=1, the case-mortality rate is the lowest; when Ntype=7, the case-mortality rate is the highest and the 95% confidence interval of "7-1" is $[0.0199184621,0.0265202301]$, which does not cover 0 and indicates that there exists significant difference between the case-mortality rate of Ntype=1 and Ntype=7. 
 ```{r include=FALSE}
+# Tukey test
 alpha=0.05;
 TukeyHSD(aov(anova.fit.ratio))
 ```
@@ -289,6 +295,7 @@ TukeyHSD(aov(anova.fit.ratio))
 ### Vaccination rate v.s. case-mortality rate 
 Moreover, we are also interested in whether there is a relationship between vaccinated rate and the case-mortality rate. For this task, since the vaccinated rate is a continuous variable, we will apply the linear regression model. For the data to be used, we first find the list of countries list that have vaccination data updated in the year of 2022. Then for those countries, we find the corresponding data in the "covid" dataset on "2022-03-01". Next, we use different linear regression models to explain the case-mortality rate.
 ```{r echo=FALSE, warning=FALSE}
+# construct the data frame to be used
 vac.new = vac.c %>% filter(DATE_UPDATED > "2021-12-31")
 Ctr_list=unique(vac.new$COUNTRY)
 covid.common=covid.c %>% filter(Country %in% Ctr_list) 
@@ -304,6 +311,7 @@ covid.new = drop_na(covid.new)
 The first model we use is the univariant linear regression model. For the vaccination data, we consider to choose between "TOTAL_VACCINATIONS_PER100" and "PERSONS_FULLY_VACCINATED_PER100". By fitting liner regression models on both of them separately, we find that there is a strong correlation between "PERSONS_FULLY_VACCINATED_PER100" and "TOTAL_VACCINATIONS_PER100" and there is an inverse relationship between vaccination rate and the case-mortality rate. For the model fitted on "PERSONS_FULLY_VACCINATED_PER100", the adjusted R-squared value is 0.14. For the model considering both "PERSONS_FULLY_VACCINATED_PER100" and "TOTAL_VACCINATIONS_PER100", the adjusted R-squared value is 0.1353, which has been decreased a little bit as the model size becomes larger. 
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
+#fit the linear models
 library(jtools)
 library(ggstance)
 fit_lm1 = lm(ratio ~ Vac, data=covid.new)
@@ -325,6 +333,7 @@ summary(fit_lm5)
 Moreover, the effect plots of "PERSONS_FULLY_VACCINATED_PER100" for both the reduced model and the full model are given below, which shows that the full model fits the data better than the reduced model with respect to the factor "PERSONS_FULLY_VACCINATED_PER100". From the comparison plot of these two models, it can be observed that the common coefficients of the two models are not the same while the difference is not large. 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
+# effect plots and summ plot
 library(broom.mixed)
 effect_plot(fit_lm4, pred = Vac_full, interval = TRUE, plot.points = TRUE)
 effect_plot(fit_lm5, pred = Vac_full, interval = TRUE, plot.points = TRUE)
@@ -338,6 +347,7 @@ In this section, we conduct sensitivity analysis to examine the plausibility of 
 For the proposed ANOVA model, from the residuals vs. fitted value plot, the expected value of the residuals is approximately 0, and the variance is approximately constant, which indicates that the assumption of constant variance is approximately satisfied. For QQ-plot, it is a straight line approximately and the assumption of normality is satisfied. Therefore, we conclude that there is no obvious violations of normal distributions of error terms. 
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
+# model diagnostics
 par(mfrow=c(2,2))
 plot(anova.fit.case.who, cex.lab=1.2, which=1:2)
 ```
