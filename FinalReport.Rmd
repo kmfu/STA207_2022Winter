@@ -1,0 +1,364 @@
+---
+title: "Course Project Report - the effectiveness of the vaccine's protection against the virus"
+author: "Kaiming Fu 917843389"
+date: " "
+output: html_document
+---
+
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+library(tidyverse)
+library(gridExtra)
+library(scales)
+library(lubridate)
+library(ggplot2)
+covid <- read_csv("WHO-COVID-19-global-data.csv")
+vac <- read_csv("vaccination-data.csv")
+```
+
+## Introduction
+The current outbreak of the novel coronavirus disease (COVID-19) has spread all over the world. Coronavirus are enveloped positive single-standed large RNA viruses which infect both human and a wide range of animals (ref:https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7169770/). In this project, the COVID-19 data to be explored comes from the the World Health Organization (WHO)  (https://covid19.who.int/WHO-COVID-19-global-data.csv). Since 22 March 2020, global data have been compiled through WHO region-specific dashboards, and/or aggregate count data reported to WHO headquarters daily. Counts reflect laboratory-confirmed cases and deaths, based on WHO case definitions unless stated otherwise, and include both domestic and repatriated cases. Case detection, definitions, testing strategies, reporting practice, and lag times (e.g. time to case notification, and time to reporting of deaths) differ between countries, territories and areas. These factors, amongst others, influence the counts presented with variable under or overestimation of true case and death counts, and variable delays to reflecting these data at a global level.
+
+```{r include=FALSE}
+covid <- covid %>% 
+  filter(WHO_region != "Other") %>% 
+  mutate(WHO_region = fct_recode(WHO_region,"Eastern Mediterranean"="EMRO","Europe" = "EURO","Africa" = "AFRO","Western Pacific" = "WPRO","Americas"="AMRO","South-East Asia" = "SEARO"))
+
+range(covid$Date_reported)
+length(unique(covid$Country))
+unique(covid$WHO_region)
+
+```
+
+#### Questions of interest and motivations
+In this project, we will explore the WHO COVID-19 dataset as well as the vaccination dataset. The questions of interest and their underlying motivations are as follow. 
+
+(1) As different WHO regions have different health services, we wonder if there is an association between WHO regions and COVID 19 cases.
+
+(2) As many countries are using a combination of different vaccines, we wonder whether this could affect the effectiveness of the vaccine's protection against the virus. In particular, we want to find if there is a number of types of vaccines used that has the least protection for the virus when the vaccine rates are of the similar level.
+
+(3) As vaccination is one of the most important methods people are using to fight against the disease, we wonder if there is a relationship between vaccination rate and the case-mortality rate. When exploring the relationship, which metric should be used to characterize the vaccination rate, and what are the differences and correlations between different metrics?
+
+After answering these questions, we could identify the protective effect of the vaccine against the virus and the reasons behind it, which will help humans develop a more effective vaccination mechanism.
+
+#### WHO COVID-19 dataset
+In the WHO COVID-19 dataset (https://covid19.who.int/WHO-COVID-19-global-data.csv), there are 186912 observations with 8 variables, which includes report date, country, region, new cases, cumulative cases, new deaths and cumulative deaths. Each observation corresponds to the daily cases and deaths reported to WHO from 236 countries. Specifically, the columns in the dataset are
+
+(1) Date_reported: Date of reporting to WHO;
+
+(2) Country_code: ISO Alpha-2 country code;
+
+(3) Country: Country, territory, area;
+
+(4) WHO_region: WHO Member States are grouped into six WHO regions – Regional Office for Africa (AFRO), Regional Office for the Americas (AMRO), Regional Office for South-East Asia (SEARO), Regional Office for Europe (EURO), Regional Office for the Eastern Mediterranean (EMRO), and Regional Office for the Western Pacific (WPRO);
+
+(5) New_Cases: New confirmed cases. Calculated by subtracting previous cumulative case count from current cumulative cases count;
+
+(6) Cumulative_cases: Cumulative confirmed cases reported to WHO to date;
+
+(7) New_deaths: New confirmed deaths. Calculated by subtracting previous cumulative deaths from current cumulative deaths;
+
+(8) Cumulative_deaths: Cumulative confirmed deaths reported to WHO to date.
+
+#### Vaccination dataset
+In order to explore the effects of vaccination rate and vaccine type on the COVID 19 data, the vaccination data from WHO (https://covid19.who.int/who-data/vaccination-data.csv) is going to be used and will be referred to as the "vaccine" dataset in the sequel. There are 228 observations in the dataset with 14 variables of each observation. Specifically, the most important columns in the dataset are
+
+(1) TOTAL_VACCINATIONS: Cumulative total vaccine doses administered;
+
+(2) PERSONS_VACCINATED_1PLUS_DOSE: Cumulative number of persons vaccinated with at least one dose;
+
+(3) TOTAL_VACCINATIONS_PER100: Cumulative total vaccine doses administered per 100 population;
+
+(4) PERSONS_VACCINATED_1PLUS_DOSE_PER100: Cumulative persons vaccinated with at least one dose per 100 population;
+
+(5) PERSONS_FULLY_VACCINATED: Cumulative number of persons fully vaccinated;
+
+(6) PERSONS_FULLY_VACCINATED_PER100: Cumulative number of persons fully vaccinated per 100 population;
+
+(7) NUMBER_VACCINES_TYPES_USED: Number of vaccine types used per country, territory, area.
+
+
+
+## Background
+In December 2019, an outbreak of pneumonia of unknown origin was reported in Wuhan, Hubei Province, China. Since then, the virus has spread all over the world, patients with SARS-CoV-2 infection may present symptoms ranging from mild to severe with a large portion of the population being asymptomatic carriers. The most common reported symptoms include fever (83%), cough (82%) and shortness of breath (31%) (ref: https://www.tandfonline.com/doi/full/10.1080/10408363.2020.1783198). 
+
+Since the beginning of the pandemic, virus transmission and mortality have been reduced through a range of measures: precautionary actions from individuals including social distancing, wearing facemasks, hand hygiene and restricting interpersonal contact to outdoor settings; widespread testing to identify individuals infected with the virus; and non-pharmaceutical policy responses from governments, including school and workplace closures, bans on public gatherings, travel restrictions and stay-at-home orders (ref: https://www.nature.com/articles/s41562-021-01122-8). In March 2020, WHO recognized the breakout as a global pandemic — the first since 2009. Globally, as of 5:18pm CET, 4 March 2022, there have been 440,807,756 confirmed cases of COVID-19, including 5,978,096 deaths, reported to WHO. 
+
+A WHO-led international mission has begun investigations in China to try to establish the origin of SARS-CoV-2. John Zarocostas reports on its activities. With new infections of COVID-19 still spreading rapidly, and health systems stretched to their limits, public interest is focused on the WHO-led international mission in China to investigate the origin of the virus that initiated the pandemic. As seen from previous outbreaks, says WHO, “it can take years to find the origin of viruses that have made the zoonotic jump from animals to humans”.
+
+## Data exploration
+
+### "covid" dataset
+
+```{r include=FALSE}
+range(covid$New_cases)
+range(covid$New_deaths)
+range(covid$Cumulative_cases)
+range(covid$Cumulative_deaths)
+covid.no=covid %>% filter(Cumulative_cases == 0) 
+length(unique(covid.no$Country))
+covid.exist<- covid %>% filter(Cumulative_cases > 0) 
+range(covid.exist$Cumulative_deaths/covid.exist$Cumulative_cases)
+covid.exist.new<- covid %>% filter(New_cases > 0,New_deaths>=0) 
+range(covid.exist.new$New_deaths/covid.exist.new$New_cases)
+```
+
+In the "covid" dataset, there are 186912 observations of 8 variables and the number of observations will be real-time changing because new daily records are updated to WHO. According to the variables in the data, we are provided with the information of report date, country, region, new cases, cumulative cases, new deaths and cumulative deaths. The time range of the dataset is "2020-01-03" to the current time. There are records for 236 countries  which are categorized into 6 WHO regions. 
+
+According to the "covid" dataset, the range of new cases is $[-32952 1294289]$ and the range of new deaths is $[-60 8786]$. The reason for having negative values might come from the calculation approach of the WHO data. In the WHO COVID-19 dataset, new cases and deaths are calculated by subtracting the previous cumulative counts from the current counts. The range of cumulative cases is $[ 0 78428884]$ and the range of cumulative deaths is $[0 947625]$.  
+
+For the cumulative case-mortality rate, we can calculate it by $\frac{\text{Cumulative deaths}}{\text{Cumulative cases}}, \text{when Cumulative cases} \neq 0$ and the range is shown to be $[0,1]$. For the daily case-mortality rate, we can calculate it by $\frac{\text{New deaths}}{\text{New cases}}, \text{when new cases} \neq 0$ and the range is shown to be $[0,9]$. The reason for having case-mortality rate=9 is that there are patients with positive test result died several days later than the test date. 
+
+The map below provides the details of new deaths cases around the world on "2022-02-18" and we can see that different countries suffer from different severity of the COVID 19. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+## Maps #### 
+library(maps)
+world <- map_data("world");
+world$region <- replace(world$region, world$region == "USA", "United States of America")
+worldplot <- ggplot() +
+  geom_polygon(data = world, aes(x=long, y = lat, group = group)) 
+
+covid.today<- covid %>% 
+  filter(Date_reported == "2022-02-18") %>% 
+  mutate(region=Country)
+
+covid.today.world<- inner_join(world, covid.today, by = "region")
+
+fig.map  <- ggplot() +
+  geom_polygon(data = covid.today.world, aes(x=long, y = lat, group = group,fill=New_deaths)) + 
+  coord_fixed(1.3)
+fig.map
+```
+
+
+Moreover, in the following figure, it is shown that the number of new cases/deaths for different WHO regions are in different magnitude across the time, which inspires us to make WHO region as a factor that affects the COVID 19 cases/deaths. Besides, by comparing the figure for COVID 19 cases and the figure for COVID 19 death, we notice that their changes are not synchronized. Although the increase in the number of COVID 19 cases will cause the increase in the number of death, we notice that for 2022, the number of death has not increased by much, while the number of cases has tripled.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+WHOregion <- covid.exist.new %>%
+          group_by(Date_reported, WHO_region) %>%
+          summarise(New_cases=sum(New_cases), New_deaths=sum(New_deaths), 
+                    Cumulative_cases=sum(Cumulative_cases), Cumulative_deaths=sum(Cumulative_deaths), .groups = 'drop')
+ggplot(WHOregion, aes(x=Date_reported, y=New_cases, colour=WHO_region, group = WHO_region)) +
+    geom_line() + 
+    theme_bw()
+ggplot(WHOregion, aes(x=Date_reported, y=New_deaths, colour=WHO_region, group = WHO_region)) +
+    geom_line() + 
+    theme_bw()
+```
+
+
+### "vaccine" dataset
+
+We perform data exploration on the "vaccine" dataset. The range of update dates for the vaccination records is from "2021-04-14" to "2022-02-27", which has to be handled carefully. Since the country list in the "vaccine" dataset is not exactly the same as that of the "covid" dataset, we will keep the records for the common countries for those two datasets. 
+
+From the scatter plot, we observe that that the number of persons who are fully vaccinated and total vaccinations per 100 population of different countries are different, which may contribute to different COVID 19 severity of different countries. 
+```{r warning=FALSE, include=FALSE}
+length(unique(vac$COUNTRY))
+Ctr_list_covid=unique(covid.exist.new$Country)
+Ctr_list_cov=unique(vac$COUNTRY)
+setdiff(Ctr_list_covid,Ctr_list_cov)
+setdiff(Ctr_list_cov,Ctr_list_covid)
+Ctr_list_common=intersect(Ctr_list_covid,Ctr_list_cov)
+vac.c=vac %>% filter(COUNTRY %in% Ctr_list_common) 
+covid.c=covid.exist.new %>% filter(Country %in% Ctr_list_common) 
+range(vac.c$DATE_UPDATED)
+range(vac.c$TOTAL_VACCINATIONS_PER100)
+unique(vac.c$VACCINES_USED)
+unique(vac.c$NUMBER_VACCINES_TYPES_USED)
+fig.scatter.7 <- vac.c %>% 
+  ggplot(aes(x=TOTAL_VACCINATIONS_PER100,y=PERSONS_FULLY_VACCINATED_PER100)) +
+  geom_point()+
+  geom_text(aes(label=COUNTRY),hjust=0, vjust=0)
+fig.scatter.7
+```
+
+For different WHO regions, the vaccination status is also different. With respect to the "TOTAL_VACCINATIONS_PER100" metric, the mean statistics for different WHO regions are provided below, from which we notice that "AFRO" has the lowest vaccination rate and "WPRO" has the highest vaccination rate. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+vac.new = vac.c %>% filter(DATE_UPDATED > "2021-12-31", PERSONS_FULLY_VACCINATED_PER100 >= 60)
+Ctr_list=unique(vac.new$COUNTRY)
+covid.common=covid.c %>% filter(Country %in% Ctr_list) 
+covid.new = covid.common %>% filter(Date_reported == "2022-03-01")
+covid.new$Vac <- vac.new$TOTAL_VACCINATIONS_PER100[match(covid.new$Country,vac.new$COUNTRY)]
+covid.new$Vac_full <- vac.new$PERSONS_FULLY_VACCINATED_PER100[match(covid.new$Country,vac.new$COUNTRY)]
+covid.new$NType <- vac.new$NUMBER_VACCINES_TYPES_USED[match(covid.new$Country,vac.new$COUNTRY)]
+WHOregion.vac <- covid.new %>%
+          group_by(Date_reported, WHO_region) %>%
+          summarise(Vac=mean(Vac), .groups = 'drop')
+WHOregion.vac
+```
+
+For the vaccine type, we notice that different countries are using quite different vaccines and there are 117 unique values for the combination of vaccines used although the number of vaccine types is much smaller than 117. Thus, we are more interested in whether the number of vaccines types used will affect the overall protection of the vaccine from the virus. From the "vaccine" dataset, the number of vaccines types can be $\{1,2,3,4,5,6,7,8,9,11\}$ and the summarize table is given below (NA are dropped) and we can see that 55 countries have used 4 types of vaccines. 
+
+```{r echo=FALSE, warning=FALSE}
+vac.c$PERSONS_VACCINATED_1PLUS_DOSE_PER100 <- replace(vac.c$PERSONS_VACCINATED_1PLUS_DOSE_PER100, vac.c$PERSONS_VACCINATED_1PLUS_DOSE_PER100 > 100, 100)
+table(vac.c$NUMBER_VACCINES_TYPES_USED)
+```
+
+
+
+## Inference analysis 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+covid.c = drop_na(covid.c)
+```
+
+### WHO regions v.s. COVID 19 cases
+First, we want to explore whether there is an association between WHO regions and new cases/deaths. To control the parameter, we will only use the data from the same day and use the new cases as the output variable. Although the number of records for a specific day will be small, the result will provide us with some trend about whether WHO region is a main factor that affects the number of COVID 19 cases. 
+
+#### Proposed model
+The model we consider to use is the one way ANOVA model, $$Y_{i,j}=\mu+\alpha_i+\epsilon_{i,j},i=1,...,6,j=1,..,n_i$$
+where $\alpha_i$ satisfies that $\sum_{i=1}^6 n_i \alpha_i =0$ and $\epsilon_{i,j}$ are i.i.d. $N(0,\sigma^2)$. $\alpha_i$ represent the effect from 6 WHO regions. The outcome $Y_{i,j}$ represents the cumulative cases for the jth country in the ith WHO region. The mean effect $\mu$ represents the mean cumulative cases. The errors $\epsilon_{i,j}$ capture any unexplained effects on the number of new cases. 
+
+Then the null hypothesis and alternative hypothesis are 
+
+$\mathcal{H}_0: \alpha_i=0, \forall i$, 
+
+$\mathcal{H}_0: \text{not all }\alpha_i=0$.
+
+#### Transformation of the output Variable 
+We perform a box-cox transformation to check whether the relationship between new cases and WHO region is linear and see whether there is a transformation needed. For the log-likelihood plot, we find that the optimal value of $\lambda$ is approximately 0, which indicates that a log transformation is needed for the output variable. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(MASS)
+boxcox(Cumulative_cases ~ WHO_region, data = covid.c)
+covid.c$Cumulative_cases_log = log(covid.c$Cumulative_cases)
+covid.c$Cumulative_deaths_log = log(covid.c$Cumulative_deaths)
+covid.c$New_cases_log= log(covid.c$New_cases)
+covid.c$New_deaths_log=log(covid.c$New_deaths)
+```
+
+#### Fitted model 
+By fitting the model on the transformed output variable, it is observed that the P-value is smaller than 0.05. Thus, we will reject the null hypothesis and conclude that WHO region has effects on the number of cumulative cases with significance level of 0.05. 
+```{r echo=FALSE, warning=FALSE}
+covid.day = covid.c %>% filter(Date_reported == "2022-03-01") 
+anova.fit.case.who<- aov(Cumulative_cases_log~WHO_region,data=covid.day)
+# Summary
+summary(anova.fit.case.who)
+```
+
+### number of types of vaccines used v.s. case-mortality rate
+We want to explore whether there is a number of types of vaccines used that has the least protection for the virus when the vaccine rates are of the similar level. To control the parameter, we will only use the data of countries that have similar vaccinated rate. By exploring the "vaccin" dataset, we decide to use the data of countries with vaccine rate higher than $60\%$ and there are 91 countries selected. 
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+vac.new = vac.c %>% filter(DATE_UPDATED > "2021-12-31", PERSONS_FULLY_VACCINATED_PER100 >= 60)
+Ctr_list=unique(vac.new$COUNTRY)
+covid.common=covid.c %>% filter(Country %in% Ctr_list) 
+covid.new = covid.common %>% filter(Date_reported > "2021-12-31")
+covid.new$Vac <- vac.new$TOTAL_VACCINATIONS_PER100[match(covid.new$Country,vac.new$COUNTRY)]
+covid.new$Vac_full <- vac.new$PERSONS_FULLY_VACCINATED_PER100[match(covid.new$Country,vac.new$COUNTRY)]
+covid.new$NType <- vac.new$NUMBER_VACCINES_TYPES_USED[match(covid.new$Country,vac.new$COUNTRY)]
+covid.new$NType <- as.factor(covid.new$NType)
+covid.new$ratio <- covid.new$Cumulative_deaths/covid.new$Cumulative_cases
+covid.new = drop_na(covid.new)
+```
+
+
+#### Proposed model
+We propose a one way ANOVA model, $$Y_{i,j}=\mu+\alpha_i+\epsilon_{i,j},i=1,...,12,j=1,..,n_i$$
+where $\alpha_i$ satisfies that $\sum_{i=1}^{10} n_i \alpha_i =0$ and $\epsilon_{i,j}$ are i.i.d. $N(0,\sigma^2)$. In this model, $\alpha_i$ represent the effect from the number of types of vaccines used. The outcome $Y_{i,j}$ represents the case-mortality rate. The mean effect $\mu$ represents the mean case-mortality rate. The errors $\epsilon_{i,j}$ capture any unexplained effects on the case-mortality rate. 
+
+Then the null hypothesis and alternative hypothesis are 
+
+$\mathcal{H}_0: \alpha_i=0, \forall i$, 
+
+$\mathcal{H}_0: \text{not all }\alpha_i=0$.
+
+#### Fitted model
+We fit the anova model and from the results, it is observed that the P-value is smaller than 0.05. Thus, we will reject the null hypothesis and conclude that the number of types of vaccines used has effects on the case-mortality rate with significance level of 0.05. From the coefficients of the fitted model, we find that countries that use more than 5 types of vaccines have larger coefficient than those with using fewer types of vaccines, which is consistent with the summarizing result of mean ratios for different numbers of types vaccines used. There might be two kinds of reasons behind: 
+
+(1) there are too many types of vaccines, resulting in a weaker defense against the COVID 19 virus;
+
+(2) countries that use too many vaccines are generally further behind and have poorer medical conditions.
+
+```{r echo=FALSE, warning=FALSE}
+anova.fit.ratio<- aov(ratio~NType,data=covid.new)
+# Summary
+summary(anova.fit.ratio)
+anova.fit.ratio$coefficients
+aggregate(ratio~NType,covid.new,mean)
+```
+
+From the Tukey test, we find that when Ntype=1, the case-mortality rate is the lowest; when Ntype=7, the case-mortality rate is the highest and the 95% confidence interval of "7-1" is $[0.0199184621,0.0265202301]$, which does not cover 0 and indicates that there exists significant difference between the case-mortality rate of Ntype=1 and Ntype=7. 
+```{r include=FALSE}
+alpha=0.05;
+TukeyHSD(aov(anova.fit.ratio))
+```
+
+
+### Vaccination rate v.s. case-mortality rate 
+Moreover, we are also interested in whether there is a relationship between vaccinated rate and the case-mortality rate. For this task, since the vaccinated rate is a continuous variable, we will apply the linear regression model. For the data to be used, we first find the list of countries list that have vaccination data updated in the year of 2022. Then for those countries, we find the corresponding data in the "covid" dataset on "2022-03-01". Next, we use different linear regression models to explain the case-mortality rate.
+```{r echo=FALSE, warning=FALSE}
+vac.new = vac.c %>% filter(DATE_UPDATED > "2021-12-31")
+Ctr_list=unique(vac.new$COUNTRY)
+covid.common=covid.c %>% filter(Country %in% Ctr_list) 
+covid.new = covid.common %>% filter(Date_reported == "2022-03-01")
+covid.new$Vac <- vac.new$TOTAL_VACCINATIONS_PER100[match(covid.new$Country,vac.new$COUNTRY)]
+covid.new$Vac_full <- vac.new$PERSONS_FULLY_VACCINATED_PER100[match(covid.new$Country,vac.new$COUNTRY)]
+covid.new <- covid.new  %>% filter(Cumulative_deaths>0)
+covid.new$ratio <- covid.new$Cumulative_deaths/covid.new$Cumulative_cases
+covid.new = drop_na(covid.new)
+```
+
+#### Fitted model
+The first model we use is the univariant linear regression model. For the vaccination data, we consider to choose between "TOTAL_VACCINATIONS_PER100" and "PERSONS_FULLY_VACCINATED_PER100". By fitting liner regression models on both of them separately, we find that there is a strong correlation between "PERSONS_FULLY_VACCINATED_PER100" and "TOTAL_VACCINATIONS_PER100" and there is an inverse relationship between vaccination rate and the case-mortality rate. For the model fitted on "PERSONS_FULLY_VACCINATED_PER100", the adjusted R-squared value is 0.14. For the model considering both "PERSONS_FULLY_VACCINATED_PER100" and "TOTAL_VACCINATIONS_PER100", the adjusted R-squared value is 0.1353, which has been decreased a little bit as the model size becomes larger. 
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(jtools)
+library(ggstance)
+fit_lm1 = lm(ratio ~ Vac, data=covid.new)
+summary(fit_lm1)
+fit_lm2 = lm(ratio ~ Vac_full, data=covid.new)
+summary(fit_lm2)
+fit_lm3 = lm(ratio ~ Vac+Vac_full, data=covid.new)
+summary(fit_lm3)
+```
+
+Then we consider to fit a model based on both vaccination rate("PERSONS_FULLY_VACCINATED_PER100" is used to quantify the vaccination rate) and WHO region. The reduced model is "ratio ~ Vac_full+WHO_region" and the full model is "ratio ~ Vac_full+WHO_region+Vac_full:WHO_region". As for the adjusted R-squared value, the full model performs much better than the reduced model as the adjusted R-squared for the reduced model is 0.2462 and that of the full model is 0.3698. 
+```{r message=FALSE, warning=FALSE, include=FALSE}
+fit_lm4 = lm(ratio ~ Vac_full+WHO_region, data=covid.new)
+summary(fit_lm4)
+fit_lm5 = lm(ratio ~ Vac_full+WHO_region+Vac_full:WHO_region, data=covid.new)
+summary(fit_lm5)
+```
+
+Moreover, the effect plots of "PERSONS_FULLY_VACCINATED_PER100" for both the reduced model and the full model are given below, which shows that the full model fits the data better than the reduced model with respect to the factor "PERSONS_FULLY_VACCINATED_PER100". From the comparison plot of these two models, it can be observed that the common coefficients of the two models are not the same while the difference is not large. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(broom.mixed)
+effect_plot(fit_lm4, pred = Vac_full, interval = TRUE, plot.points = TRUE)
+effect_plot(fit_lm5, pred = Vac_full, interval = TRUE, plot.points = TRUE)
+plot_summs(fit_lm4, fit_lm5, scale = TRUE)
+```
+
+
+## Sensitivity analysis
+In this section, we conduct sensitivity analysis to examine the plausibility of key assumptions. The main assumptions are the normality assumption for all linear models and the equal variance assumption for the ANOVA model. 
+
+For the proposed ANOVA model, from the residuals vs. fitted value plot, the expected value of the residuals is approximately 0, and the variance is approximately constant, which indicates that the assumption of constant variance is approximately satisfied. For QQ-plot, it is a straight line approximately and the assumption of normality is satisfied. Therefore, we conclude that there is no obvious violations of normal distributions of error terms. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+par(mfrow=c(2,2))
+plot(anova.fit.case.who, cex.lab=1.2, which=1:2)
+```
+
+
+For the proposed linear model, from the residual plot, we notice that the residuals are not far away from 0, which indicates that the linear model can fit the dataset to some extend. For the QQ-plot, it is a straight line approximately and the assumption of normality is satisfied. Therefore, we conclude that there is no obvious violations of normal distributions of error terms. 
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+par(mfrow=c(2,2))
+plot(fit_lm5$residuals,cex.lab=1)
+plot(fit_lm5, cex.lab=2,which=2,xlim=c(-1.8,1.8))
+```
+
+
+## Conclusion and future work 
+In this project, we have explored the WHO COVID 19 dataset and the vaccination dataset to answer the questions of interest. From the analysis, we conclude that (1) there is an association between WHO regions and COVID 19 cases; (2) a combination of different vaccines may affect the effectiveness of the vaccine's protection against the virus and Ntype=7 has the least protection for the virus when the vaccination rates are of the similar level; (3) there is an inverse relationship between vaccination rate and the case-mortality rate, and the performance of the full multivariate regression model(take WHO_region into consideration) is better than that of the univariante linear model. These findings support our continued development of new, more effective vaccines, and inspire us not to use too many types of vaccines at once, which could weaken the vaccine's protection against the virus. As for the future work, since the "covid" data has a strong time manner, we will also consider to use some time series methods and see whether there is an improvement in the performance. 
+
+
+
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+```
+
+
